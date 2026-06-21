@@ -1,1 +1,2 @@
-web: gunicorn eduquiz.wsgi
+gunicorn eduquiz.wsgi
+
