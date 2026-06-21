@@ -1,2 +1,3 @@
-gunicorn eduquiz.wsgi
+gunicorn eduquiz.wsgi:application
+
 
