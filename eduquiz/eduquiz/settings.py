@@ -26,7 +26,8 @@ SECRET_KEY = 'django-insecure-#c!oqx7axgox$g)3%sk7pv^x^%upgpedf85qry2i@f63jlx(n(
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['eduquiz-ai-dev-fortuno.onrender.com', 'localhost']
+
 
 
 # Application definition
