@@ -1,0 +1,26 @@
+{% extends 'quiz/base.html' %}
+
+{% block content %}
+<div class="quiz-card">
+    <h2>{{ quiz.title }}</h2>
+    <p>Nombre de questions : {{ quiz.question_count }} · Niveau : {{ quiz.get_level_display }}</p>
+    <form method="post">
+        {% csrf_token %}
+        {% for question in questions %}
+            <div class="panel" style="margin-bottom: 18px;">
+                <p><strong>Question {{ forloop.counter }}</strong></p>
+                <p>{{ question.text }}</p>
+                <div class="field-group">
+                    {% for option_key, option_text in question.all_options %}
+                        <label style="display:block; margin-bottom:8px;">
+                            <input type="radio" name="question_{{ question.id }}" value="{{ option_key }}" />
+                            {{ option_text }}
+                        </label>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endfor %}
+        <input type="submit" class="button" value="Terminer le quiz" />
+    </form>
+</div>
+{% endblock %}

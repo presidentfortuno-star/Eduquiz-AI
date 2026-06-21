@@ -1,0 +1,92 @@
+{% extends 'quiz/base.html' %}
+
+{% block content %}
+<div class="grid" style="grid-template-columns: 1.2fr 0.8fr; gap: 24px;">
+    <div>
+        <div class="form-card">
+            <h2>Importer un PDF de cours</h2>
+            <p>Choisis un fichier PDF et donne-lui un titre clair.</p>
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="field-group">
+                    {{ upload_form.title.label_tag }}
+                    {{ upload_form.title }}
+                </div>
+                <div class="field-group">
+                    {{ upload_form.file.label_tag }}
+                    {{ upload_form.file }}
+                </div>
+                <input type="submit" class="button" value="Envoyer le PDF" />
+            </form>
+        </div>
+
+        <div class="info-card">
+            <h3>Statistiques rapides</h3>
+            <div class="badge">{{ progress.quizzes_count }} quiz</div>
+            <div class="badge">{{ progress.attempts_count }} passages</div>
+            <div class="badge">Moyenne {{ progress.average_score }}/10</div>
+            <p class="small-text">Ton tableau de bord conserve ton historique et te permet de revenir sur les quiz déjà passés.</p>
+        </div>
+
+        <div class="quiz-card">
+            <h3>Mes documents</h3>
+            {% if documents %}
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Titre</th>
+                            <th>Importé le</th>
+                            <th>Résumé</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for document in documents %}
+                            <tr>
+                                <td>
+                                    <strong>{{ document.title }}</strong>
+                                    {% if document.keyword_list %}
+                                        <div style="margin-top:8px;">
+                                            {% for keyword in document.keyword_list %}
+                                                <span class="badge">{{ keyword }}</span>
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </td>
+                                <td>{{ document.short_summary }}</td>
+                                <td>{{ document.uploaded_at|date:'d/m/Y H:i' }}</td>
+                                <td><a class="button secondary-button" href="{% url 'quiz:create_quiz' document.id %}">Créer un quiz</a></td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p>Aucun document importé pour le moment.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div>
+        <div class="panel">
+            <h3>Quiz récents</h3>
+            {% if quizzes %}
+                <ul style="list-style:none; padding-left:0;">
+                    {% for quiz in quizzes %}
+                        <li style="margin-bottom:16px;">
+                            <strong>{{ quiz.title }}</strong><br />
+                            {{ quiz.question_count }} questions · {{ quiz.get_level_display }}<br />
+                            <a class="button secondary-button" href="{% url 'quiz:take_quiz' quiz.id %}">Passer le quiz</a>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p>Aucun quiz généré pour le moment.</p>
+            {% endif %}
+        </div>
+        <div class="panel">
+            <h3>Conseil rapide</h3>
+            <p>Importe un PDF de cours clair, puis commence par un quiz de 10 questions. C’est le meilleur moyen de vérifier rapidement ta compréhension.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

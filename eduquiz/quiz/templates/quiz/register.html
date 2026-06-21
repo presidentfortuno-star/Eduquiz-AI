@@ -1,0 +1,28 @@
+{% extends 'quiz/base.html' %}
+
+{% block content %}
+<div class="form-card">
+    <h2>Créer ton compte</h2>
+    <p>Crée un compte pour commencer à importer des cours et générer des quiz.</p>
+    <form method="post">
+        {% csrf_token %}
+        <div class="field-group">
+            {{ form.username.label_tag }}
+            {{ form.username }}
+        </div>
+        <div class="field-group">
+            {{ form.email.label_tag }}
+            {{ form.email }}
+        </div>
+        <div class="field-group">
+            {{ form.password1.label_tag }}
+            {{ form.password1 }}
+        </div>
+        <div class="field-group">
+            {{ form.password2.label_tag }}
+            {{ form.password2 }}
+        </div>
+        <input type="submit" class="button" value="Créer mon compte" />
+    </form>
+</div>
+{% endblock %}

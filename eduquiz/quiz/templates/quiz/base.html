@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EduQuiz AI</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f7fb;
+            color: #1f2937;
+        }
+        .page {
+            max-width: 980px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 18px 0;
+        }
+        header h1 {
+            margin: 0;
+            font-size: 32px;
+        }
+        .hero-card,
+        .panel,
+        .form-card,
+        .quiz-card,
+        .result-card {
+            background: #ffffff;
+            border-radius: 18px;
+            box-shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
+            padding: 28px;
+            margin-bottom: 20px;
+        }
+        .grid {
+            display: grid;
+            gap: 20px;
+        }
+        .button,
+        button,
+        input[type="submit"] {
+            border: none;
+            padding: 14px 22px;
+            border-radius: 12px;
+            background: #2563eb;
+            color: white;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .secondary-button {
+            background: #e5e7eb;
+            color: #111827;
+        }
+        .input-field {
+            width: 100%;
+            padding: 14px 16px;
+            border-radius: 12px;
+            border: 1px solid #d1d5db;
+            margin-top: 8px;
+            box-sizing: border-box;
+        }
+        .field-group {
+            margin-bottom: 16px;
+        }
+        .small-text {
+            color: #6b7280;
+            margin-top: 6px;
+            font-size: 0.95rem;
+        }
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .table th,
+        .table td {
+            padding: 12px 14px;
+            border-bottom: 1px solid #e5e7eb;
+            text-align: left;
+        }
+        .info-card {
+            display: grid;
+            gap: 14px;
+            border: 1px solid #e5e7eb;
+            padding: 22px;
+            border-radius: 18px;
+            background: #fafbff;
+            margin-bottom: 20px;
+        }
+        .summary-box {
+            background: #f3f4f6;
+            border-radius: 14px;
+            padding: 18px;
+            margin-top: 14px;
+            color: #334155;
+            line-height: 1.6;
+        }
+        .badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 999px;
+            background: #e0f2fe;
+            color: #075985;
+            font-size: 0.95rem;
+            margin-right: 8px;
+            margin-bottom: 8px;
+        }
+        .radio-label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 14px;
+            background: #f8fafc;
+            border-radius: 12px;
+            margin-bottom: 10px;
+            border: 1px solid #e2e8f0;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+        .radio-label:hover {
+            background: #eef2ff;
+        }
+        .radio-label input {
+            accent-color: #2563eb;
+        }
+        .field-group input[type='text'],
+        .field-group input[type='email'],
+        .field-group input[type='password'],
+        .field-group select {
+            width: 100%;
+            padding: 14px 16px;
+            border-radius: 12px;
+            border: 1px solid #d1d5db;
+            margin-top: 8px;
+            box-sizing: border-box;
+            font-size: 1rem;
+        }
+        .field-group textarea {
+            width: 100%;
+            min-height: 130px;
+            padding: 14px 16px;
+            border-radius: 12px;
+            border: 1px solid #d1d5db;
+            margin-top: 8px;
+            box-sizing: border-box;
+            font-size: 1rem;
+        }
+        .status-success {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: #ecfdf5;
+            color: #166534;
+            border-radius: 999px;
+            padding: 8px 14px;
+        }
+        .status-warning {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: #fef3c7;
+            color: #92400e;
+            border-radius: 999px;
+            padding: 8px 14px;
+        }
+        .flash-message {
+            margin-bottom: 22px;
+            padding: 18px;
+            background: #dbeafe;
+            color: #1e3a8a;
+            border-radius: 14px;
+        }
+        .footer {
+            margin-top: 24px;
+            padding-top: 24px;
+            border-top: 1px solid #e5e7eb;
+            color: #6b7280;
+        }
+        a {
+            text-decoration: none;
+            color: inherit;
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <header>
+            <div>
+                <h1>EduQuiz AI</h1>
+                <p class="small-text">Créé par Fortuno · Uploader un PDF et générer un quiz en quelques secondes.</p>
+            </div>
+            <div>
+                {% if request.user.is_authenticated %}
+                    <a class="button secondary-button" href="{% url 'quiz:dashboard' %}">Mon espace</a>
+                    <a class="button secondary-button" href="{% url 'quiz:logout' %}">Déconnexion</a>
+                {% else %}
+                    <a class="button" href="{% url 'quiz:login' %}">Connexion</a>
+                    <a class="button" href="{% url 'quiz:register' %}">Créer un compte</a>
+                {% endif %}
+            </div>
+        </header>
+
+        {% for message in messages %}
+            <div class="flash-message">{{ message }}</div>
+        {% endfor %}
+
+        {% block content %}{% endblock %}
+
+        <footer class="footer">
+            <p>EduQuiz AI · MVP pour extraction PDF, quiz et correction. Design épuré, accessible et moderne.</p>
+            <p class="small-text">Projet présenté par Fortuno.</p>
+        </footer>
+    </div>
+</body>
+</html>

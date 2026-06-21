@@ -1,0 +1,22 @@
+{% extends 'quiz/base.html' %}
+
+{% block content %}
+<div class="result-card">
+    <h2>Résultats</h2>
+    <p>Score : <strong>{{ attempt.score }}/{{ attempt.max_score }}</strong></p>
+    <div class="panel" style="margin-top: 18px; white-space: pre-wrap;">
+        <h3>Correction détaillée</h3>
+        {{ attempt.feedback }}
+    </div>
+    {% if attempt.max_score|add:'-0' > attempt.score %}
+        <div class="panel" style="margin-top: 18px;">
+            <p>Tu peux revoir les questions ratées pour mieux comprendre les points clés.</p>
+            <a class="button" href="{% url 'quiz:review_errors' attempt.id %}">Réviser mes erreurs</a>
+        </div>
+    {% endif %}
+    <div style="margin-top: 20px; display:flex; gap:12px; flex-wrap: wrap;">
+        <a class="button" href="{% url 'quiz:dashboard' %}">Retour au tableau de bord</a>
+        <a class="button secondary-button" href="{% url 'quiz:create_quiz' attempt.quiz.document.id %}">Créer un nouveau quiz</a>
+    </div>
+</div>
+{% endblock %}
