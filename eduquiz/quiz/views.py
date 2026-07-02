@@ -10,7 +10,7 @@ from django.db import transaction
 from django.db.models import Avg, Max
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
-from .forms import DocumentUploadForm, QuizCreateForm, UserRegistrationForm
+from .forms import DocumentUploadForm, QuizCreateForm, UserLoginForm, UserRegistrationForm
 from .models import Answer, Document, Quiz, QuizAttempt, QuizQuestion
 from .utils import (
     extract_pdf_text,
@@ -62,14 +62,14 @@ def user_login(request):
         return redirect('quiz:dashboard')
 
     if request.method == 'POST':
-        form = AuthenticationForm(request, data=request.POST)
+        form = UserLoginForm(request, data=request.POST)
         if form.is_valid():
             user = form.get_user()
             login(request, user)
             messages.success(request, 'Connexion réussie.')
             return redirect('quiz:dashboard')
     else:
-        form = AuthenticationForm()
+        form = UserLoginForm()
 
     return render(request, 'quiz/login.html', {'form': form})
 

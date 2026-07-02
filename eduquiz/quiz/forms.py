@@ -1,5 +1,5 @@
 from django import forms
-from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.contrib.auth.models import User
 from .models import Document, Quiz
 
@@ -10,6 +10,46 @@ class UserRegistrationForm(UserCreationForm):
     class Meta:
         model = User
         fields = ['username', 'email', 'password1', 'password2']
+        widgets = {
+            'username': forms.TextInput(
+                attrs={
+                    'placeholder': 'Nom d’utilisateur',
+                    'class': 'input-field',
+                }
+            ),
+            'email': forms.EmailInput(
+                attrs={
+                    'placeholder': 'Email',
+                    'class': 'input-field',
+                }
+            ),
+            'password1': forms.PasswordInput(
+                attrs={
+                    'placeholder': 'Mot de passe',
+                    'class': 'input-field',
+                }
+            ),
+            'password2': forms.PasswordInput(
+                attrs={
+                    'placeholder': 'Confirme le mot de passe',
+                    'class': 'input-field',
+                }
+            ),
+        }
+
+
+class UserLoginForm(AuthenticationForm):
+    username = forms.CharField(
+        widget=forms.TextInput(
+            attrs={'placeholder': 'Nom d’utilisateur', 'class': 'input-field'}
+        )
+    )
+    password = forms.CharField(
+        strip=False,
+        widget=forms.PasswordInput(
+            attrs={'placeholder': 'Mot de passe', 'class': 'input-field'}
+        ),
+    )
 
 
 class DocumentUploadForm(forms.ModelForm):

@@ -365,5 +365,18 @@
             <p class="small-text">Projet présenté par Fortuno.</p>
         </footer>
     </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            document.querySelectorAll('.toggle-password').forEach(function (checkbox) {
+                checkbox.addEventListener('change', function () {
+                    var targetId = this.dataset.target;
+                    var input = document.getElementById(targetId);
+                    if (input) {
+                        input.type = this.checked ? 'text' : 'password';
+                    }
+                });
+            });
+        });
+    </script>
 </body>
 </html>
