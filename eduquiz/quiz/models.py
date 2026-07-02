@@ -1,4 +1,7 @@
 from collections import Counter
+import os
+import uuid
+
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
@@ -16,6 +19,12 @@ OPTION_CHOICES = [
 ]
 
 
+def document_upload_path(instance, filename):
+    safe_name = os.path.basename(filename)
+    unique_prefix = uuid.uuid4().hex[:8]
+    return f'documents/user_{instance.user_id}/{unique_prefix}_{safe_name}'
+
+
 class Document(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -23,7 +32,7 @@ class Document(models.Model):
         related_name='documents',
     )
     title = models.CharField(max_length=255)
-    file = models.FileField(upload_to='documents/')
+    file = models.FileField(upload_to=document_upload_path)
     extracted_text = models.TextField(blank=True)
     summary = models.TextField(blank=True)
     keywords = models.TextField(blank=True)
@@ -37,6 +46,11 @@ class Document(models.Model):
 
     def __str__(self):
         return self.title
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['user', '-uploaded_at']),
+        ]
 
 
 class Quiz(models.Model):
@@ -57,6 +71,11 @@ class Quiz(models.Model):
 
     def __str__(self):
         return f"{self.title} — {self.document.title}"
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['user', '-created_at']),
+        ]
 
 
 class QuizQuestion(models.Model):
@@ -107,6 +126,25 @@ class QuizAttempt(models.Model):
 
     def __str__(self):
         return f"{self.user.username} — {self.quiz.title} ({self.score}/{self.max_score})"
+
+    @property
+    def duration_seconds(self):
+        if self.started_at and self.completed_at:
+            return int((self.completed_at - self.started_at).total_seconds())
+        return None
+
+    @property
+    def duration_display(self):
+        seconds = self.duration_seconds
+        if seconds is None:
+            return '—'
+        minutes, remainder = divmod(seconds, 60)
+        return f"{minutes}m {remainder}s" if minutes else f"{remainder}s"
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['user', '-started_at']),
+        ]
 
 
 class Answer(models.Model):

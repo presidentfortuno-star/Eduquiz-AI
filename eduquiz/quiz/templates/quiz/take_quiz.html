@@ -7,12 +7,12 @@
     <form method="post">
         {% csrf_token %}
         {% for question in questions %}
-            <div class="panel" style="margin-bottom: 18px;">
+            <div class="panel panel-compact">
                 <p><strong>Question {{ forloop.counter }}</strong></p>
                 <p>{{ question.text }}</p>
                 <div class="field-group">
                     {% for option_key, option_text in question.all_options %}
-                        <label style="display:block; margin-bottom:8px;">
+                        <label class="radio-label">
                             <input type="radio" name="question_{{ question.id }}" value="{{ option_key }}" />
                             {{ option_text }}
                         </label>

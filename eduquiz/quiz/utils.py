@@ -4,6 +4,8 @@ import re
 from collections import Counter
 from PyPDF2 import PdfReader
 
+from .ai_service import is_ai_enabled
+
 FRENCH_STOPWORDS = {
     'et', 'la', 'le', 'les', 'des', 'un', 'une', 'de', 'du', 'dans', 'pour', 'sur',
     'avec', 'sans', 'est', 'sont', 'qui', 'que', 'par', 'au', 'aux', 'ce', 'cet',
@@ -165,11 +167,44 @@ def _is_valid_definition(definition):
         return False
     if any(normalized.startswith(prefix) for prefix in DEFINITION_INVALID_STARTS):
         return False
-    if 'proche de' in normalized and normalized.startswith('très'):  # weak comparative phrasing
+    if 'proche de' in normalized and normalized.startswith('très'):  # tournure comparative faible
         return False
     if normalized.count(' ') < 2:
         return False
     return True
+
+
+def _normalize_option_text(value):
+    if not isinstance(value, str):
+        return ''
+    return re.sub(r'\s+', ' ', value.strip().lower())
+
+
+def _is_similar_text(a, b):
+    a = _normalize_option_text(a)
+    b = _normalize_option_text(b)
+    if not a or not b:
+        return False
+    return a == b or a in b or b in a
+
+
+def _is_valid_distractor(correct, distractor):
+    if not isinstance(distractor, str) or not distractor.strip():
+        return False
+    normalized = _normalize_option_text(distractor)
+    if len(normalized) < 3:
+        return False
+    if normalized in FRENCH_STOPWORDS or normalized in ENGLISH_STOPWORDS or normalized in WEAK_KEYWORDS:
+        return False
+    if _is_similar_text(correct, normalized) or _is_similar_text(normalized, correct):
+        return False
+    if normalized in {'analyse', 'théorie', 'concept', 'notion'}:
+        return False
+    return True
+
+
+def _keyword_occurrences(text, keyword):
+    return len(re.findall(rf"\b{re.escape(keyword)}\b", text.lower()))
 
 
 def _find_definition_candidates(text):
@@ -211,10 +246,8 @@ def extract_keywords(text, limit=20):
         filtered.append(normalized_word)
 
     counts = Counter(filtered)
-    repeated = [word for word, count in counts.most_common() if count > 1]
-    if repeated:
-        return repeated[:limit]
-    return [word for word, _ in counts.most_common(limit)]
+    keywords = [word for word, _ in counts.most_common() if _is_valid_keyword(word)]
+    return keywords[:limit]
 
 
 def _is_valid_keyword(keyword):
@@ -239,6 +272,47 @@ def _question_hash(text, options, correct):
     return f"{text.strip().lower()}|{'|'.join(normalized_options)}|{correct}"
 
 
+def _is_valid_question_item(item):
+    if not item or not isinstance(item, dict):
+        return False
+    text = item.get('text', '')
+    options = item.get('options', [])
+    correct = item.get('correct', '')
+    if not isinstance(text, str) or len(text.strip()) < 15:
+        return False
+    if not isinstance(options, list) or len(options) != 4:
+        return False
+    normalized_options = [_normalize_option_text(opt) for opt in options if isinstance(opt, str) and opt.strip()]
+    if len(normalized_options) != 4 or len(set(normalized_options)) != 4:
+        return False
+    if correct not in ('a', 'b', 'c', 'd'):
+        return False
+    if options[ord(correct) - ord('a')].strip().lower() not in normalized_options:
+        return False
+    for i in range(len(normalized_options)):
+        for j in range(i + 1, len(normalized_options)):
+            if _is_similar_text(normalized_options[i], normalized_options[j]):
+                return False
+    if len(re.sub(r'[^A-Za-zÀ-ÿ]', '', text)) < 10:
+        return False
+    if any(_is_similar_text(text, opt) for opt in normalized_options):
+        return False
+    return True
+
+
+def _append_unique_questions(questions, candidates, seen_keys, count):
+    for item in candidates:
+        if not _is_valid_question_item(item):
+            continue
+        key = _question_hash(item['text'], item['options'], item['correct'])
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        questions.append(item)
+        if len(questions) >= count:
+            break
+
+
 def _is_html_course(text):
     low = text.lower()
     html_signals = ['<html', '<body', '<head', '<title', 'doctype', 'balise', 'balises', 'html', 'body>', 'href', '<a', '<img', 'css', 'html5']
@@ -247,7 +321,7 @@ def _is_html_course(text):
 
 
 def _generate_html_quiz(text, count=10, level='easy'):
-    # A set of canonical HTML questions useful for introductory courses
+    # Jeu de questions HTML de base utile pour les cours introductifs
     pool = [
         {
             'text': 'Qui est le concepteur du langage HTML ?',
@@ -287,7 +361,7 @@ def _generate_html_quiz(text, count=10, level='easy'):
             break
         questions.append(q)
 
-    # If need more, generate simple keyword questions from text but filtered
+    # Si besoin, générer des questions simples basées sur les mots-clés du texte, filtrées
     if len(questions) < count:
         keywords = extract_keywords(text, limit=30)
         added = set()
@@ -313,13 +387,18 @@ def _keyword_distractors(correct, keywords):
     for keyword in distractors:
         if len(result) >= 3:
             break
-        normalized = _normalize_term(keyword)
-        if normalized == _normalize_term(correct) or _normalize_term(correct) in normalized or normalized in _normalize_term(correct):
-            continue
-        if not _is_valid_keyword(keyword):
+        if not _is_valid_distractor(correct, keyword):
             continue
         result.append(keyword)
-    fallback = ['analyse', 'théorie', 'concept']
+
+    if len(result) < 3:
+        candidates = [k for k in keywords if k != correct and _is_valid_distractor(correct, k) and k not in result]
+        for candidate in candidates:
+            if len(result) >= 3:
+                break
+            result.append(candidate)
+
+    fallback = ['analyse', 'théorie', 'concept', 'expression', 'notion']
     idx = 0
     while len(result) < 3:
         candidate = fallback[idx % len(fallback)]
@@ -330,6 +409,10 @@ def _keyword_distractors(correct, keywords):
 
 
 def summarize_text(text, sentence_count=4):
+    from .ai_service import summarize_with_ai
+    ai_summary = summarize_with_ai(text, sentence_count=sentence_count)
+    if ai_summary:
+        return ai_summary
     text = _clean_text(text)
     sentences = re.split(r'(?<=[.!?])\s+', text)
     if len(sentences) <= sentence_count:
@@ -404,6 +487,22 @@ def _build_keyword_question(keyword, distractors, prompt, level='easy'):
     }
 
 
+def _build_cloze_question(answer, sentence, distractors, level='medium'):
+    blanked = re.sub(re.escape(answer), '_____', sentence, count=1, flags=re.IGNORECASE)
+    prompt = f'Complétez la phrase suivante : {blanked}'
+    wrong_options = list(distractors)
+    random.shuffle(wrong_options)
+    options = [answer] + wrong_options[:3]
+    random.shuffle(options)
+    labels = ['a', 'b', 'c', 'd']
+    return {
+        'text': prompt,
+        'options': options,
+        'correct': labels[options.index(answer)],
+        'explanation': f'Le mot correct est « {answer} ».',
+    }
+
+
 def _build_true_false_question(statement, is_true=True):
     options = ['Vrai', 'Faux']
     correct = 'a' if is_true else 'b'
@@ -417,29 +516,35 @@ def _build_true_false_question(statement, is_true=True):
 
 def generate_quiz_questions(text, count=10, level='easy', mode='default'):
     text = _clean_text(text)
-    # If the course is clearly about HTML, generate targeted HTML questions first
-    if _is_html_course(text):
-        return _generate_html_quiz(text, count, level)
-    # Mode 'smart' force un générateur plus intelligent quel que soit le PDF
-    if mode == 'smart':
-        return _generate_smart_quiz(text, count, level)
-    # Evaluate quality: if too low, return an actionable single-item result
-    score, reasons = assess_text_quality(text)
-    if score < 0.45 and mode != 'force':
-        prompt = "Le texte fourni semble insuffisant pour générer des questions de qualité. Souhaitez-vous : (1) téléverser plus de contenu, (2) activer le mode 'smart' ou (3) demander une validation manuelle ?"
-        options = ["Téléverser plus de contenu", "Activer mode 'smart'", "Demander validation manuelle", "Générer quand même"]
-        return [{
-            'text': prompt,
-            'options': options,
-            'correct': 'd',
-            'explanation': 'Score qualité faible: ' + ', '.join(reasons)
-        }]
-    definitions = _find_definition_candidates(text)
-    questions = []
-    used_terms = set()
-    keywords = extract_keywords(text, limit=30)
+    if not text:
+        return []
 
-    question_texts = set()
+    questions = []
+    seen_keys = set()
+
+    if _is_html_course(text):
+        html_questions = _generate_html_quiz(text, count, level)
+        if html_questions and len(html_questions) >= min(count, 3):
+            return html_questions[:count]
+        _append_unique_questions(questions, html_questions, seen_keys, count)
+
+    if mode in ('smart', 'default'):
+        smart_questions = _generate_smart_quiz(text, count, level)
+        if smart_questions and len(smart_questions) >= min(count, 3):
+            return smart_questions[:count]
+        _append_unique_questions(questions, smart_questions or [], seen_keys, count)
+
+    if is_ai_enabled():
+        from .ai_service import generate_questions_with_ai
+        ai_questions = generate_questions_with_ai(text, count=count, level=level)
+        if ai_questions and len(ai_questions) >= min(count, 3):
+            return ai_questions[:count]
+        _append_unique_questions(questions, ai_questions or [], seen_keys, count)
+
+    definitions = _find_definition_candidates(text)
+    keywords = extract_keywords(text, limit=40)
+    used_terms = set()
+
     for term, definition in definitions:
         if len(questions) >= count:
             break
@@ -450,6 +555,7 @@ def generate_quiz_questions(text, count=10, level='easy', mode='default'):
         if normalized_term in used_terms:
             continue
         used_terms.add(normalized_term)
+
         distractors = [d for _, d in definitions if d != definition]
         unique_distractors = []
         for item in distractors:
@@ -461,60 +567,64 @@ def generate_quiz_questions(text, count=10, level='easy', mode='default'):
         distractors = [d for i, d in enumerate(distractors) if d not in distractors[:i]]
         if len(distractors) < 3:
             distractors.extend(['Une expression', 'Un concept', 'Une notion'])
+
         question_data = _build_question(display_term, definition, distractors, level)
-        question_key = _question_hash(question_data['text'], question_data['options'], question_data['correct'])
-        if question_key in question_texts:
-            continue
-        question_texts.add(question_key)
-        questions.append(question_data)
+        _append_unique_questions(questions, [question_data], seen_keys, count)
 
     if len(questions) < count:
         remaining_keywords = [k for k in keywords if _is_valid_keyword(k)]
-        used_keywords = set()
         for keyword in remaining_keywords:
             if len(questions) >= count:
                 break
             normalized_keyword = _normalize_term(keyword)
-            if normalized_keyword in used_keywords or normalized_keyword in used_terms:
+            if normalized_keyword in used_terms:
                 continue
-            used_keywords.add(normalized_keyword)
             used_terms.add(normalized_keyword)
             distractors = _keyword_distractors(keyword, keywords)
             prompt = _keyword_prompt(level, len(questions))
             question_data = _build_keyword_question(keyword, distractors, prompt, level)
-            question_key = _question_hash(question_data['text'], question_data['options'], question_data['correct'])
-            if question_key in question_texts:
-                continue
-            question_texts.add(question_key)
-            questions.append(question_data)
+            _append_unique_questions(questions, [question_data], seen_keys, count)
 
     if len(questions) < count:
-        fallback_keywords = [k for k in keywords if k not in used_terms and _is_valid_keyword(k)]
-        for keyword in fallback_keywords:
+        sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', text) if s.strip()]
+        for sentence in sentences:
             if len(questions) >= count:
                 break
-            distractors = _keyword_distractors(keyword, keywords)
-            question_data = _build_keyword_question(keyword, distractors, _keyword_prompt(level, len(questions)), level)
-            question_key = _question_hash(question_data['text'], question_data['options'], question_data['correct'])
-            if question_key in question_texts:
+            if _is_noise_text_segment(sentence) or len(sentence.split()) < 10:
                 continue
-            question_texts.add(question_key)
-            questions.append(question_data)
+            candidates = []
+            for token in re.findall(r"[\wÀ-ÿ'’\-]{4,}", sentence):
+                if token.lower() in FRENCH_STOPWORDS or token.lower() in ENGLISH_STOPWORDS:
+                    continue
+                if not _is_valid_keyword(token):
+                    continue
+                candidates.append((_normalize_term(token), token))
+            if not candidates:
+                continue
+            candidates.sort(key=lambda item: (-len(item[1]), item[0] in keywords, item[1].lower()))
+            answer = candidates[0][1]
+            if re.search(re.escape(answer), sentence, flags=re.IGNORECASE):
+                distractors = _keyword_distractors(answer, keywords)
+                question_data = _build_cloze_question(answer, sentence, distractors, level)
+                _append_unique_questions(questions, [question_data], seen_keys, count)
 
     if len(questions) < count:
         default_terms = ['structure', 'balise', 'formulaire', 'connexion', 'algorithme', 'machine']
         for default in default_terms:
             if len(questions) >= count:
                 break
+            if _normalize_term(default) in used_terms:
+                continue
             distractors = _keyword_distractors(default, default_terms)
-            questions.append(_build_keyword_question(default, distractors, _keyword_prompt(level, len(questions)), level))
+            question_data = _build_keyword_question(default, distractors, _keyword_prompt(level, len(questions)), level)
+            _append_unique_questions(questions, [question_data], seen_keys, count)
 
     return questions[:count]
 
 
 def _generate_smart_quiz(text, count=10, level='easy'):
     text = _clean_text(text)
-    # Use FULL TEXT, not summary - critical for quality
+    # Utiliser le TEXTE COMPLET, pas le résumé - essentiel pour la qualité
     sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', text) if s.strip()]
     sentences = [s for s in sentences if not _is_noise_text_segment(s) and len(s.split()) >= 8]
     keywords = extract_keywords(text, limit=50)
@@ -533,7 +643,7 @@ def _generate_smart_quiz(text, count=10, level='easy'):
 
     sentences.sort(key=lambda s: (-sentence_score(s), -len(s)))
 
-    # Extract definitions from full text with multiple patterns
+    # Extraire des définitions du texte complet avec plusieurs motifs
     for s in sentences:
         if len(questions) >= count:
             break
@@ -549,7 +659,7 @@ def _generate_smart_quiz(text, count=10, level='easy'):
                 questions.append(_build_question(term, definition, distractors, level))
                 used_answers.add(_normalize_term(term))
 
-    # Generate some true/false statements from good sentences
+    # Générer quelques affirmations vrai/faux à partir de bonnes phrases
     for s in sentences:
         if len(questions) >= count:
             break
@@ -560,7 +670,7 @@ def _generate_smart_quiz(text, count=10, level='easy'):
             if not _is_noise_text_segment(s):
                 questions.append(_build_true_false_question(s, True))
 
-    # Then create cloze / keyword questions from top sentences
+    # Puis créer des questions à trou / mots-clés à partir des meilleures phrases
     for s in sentences:
         if len(questions) >= count:
             break
@@ -589,7 +699,7 @@ def _generate_smart_quiz(text, count=10, level='easy'):
         distractors = _keyword_distractors(answer, keywords)
         questions.append(_build_keyword_question(answer, distractors, prompt, level))
 
-    # If still short, fall back to keyword questions (filtered)
+    # Si le nombre reste insuffisant, revenir à des questions à base de mots-clés (filtrées)
     if len(questions) < count:
         remaining = [k for k in keywords if _is_valid_keyword(k) and _normalize_term(k) not in used_answers]
         for kw in remaining:
@@ -612,25 +722,25 @@ def assess_text_quality(text):
     definitions = _find_definition_candidates(t)
     keywords = extract_keywords(t, limit=40)
 
-    # length score
+    # score de longueur
     len_score = min(1.0, length / 3000.0)
     if length < 500:
         reasons.append('texte court')
-    # sentence variety
+    # variété des phrases
     sent_score = min(1.0, sentence_count / 8.0)
     if sentence_count < 4:
         reasons.append('peu de phrases')
-    # definition presence
+    # présence de définitions
     def_score = min(1.0, len(definitions) / 3.0)
     if len(definitions) == 0:
         reasons.append('aucune définition détectée')
-    # keyword richness
+    # richesse en mots-clés
     kw_score = min(1.0, len(keywords) / 10.0)
     if len(keywords) < 6:
         reasons.append('peu de mots-clés significatifs')
 
-    # weighted average
+    # moyenne pondérée
     score = (0.4 * len_score) + (0.2 * sent_score) + (0.2 * def_score) + (0.2 * kw_score)
-    # normalize reasons (unique)
+    # normaliser les raisons (unique)
     reasons = list(dict.fromkeys(reasons))
     return score, reasons

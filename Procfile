@@ -1,1 +1,1 @@
-gunicorn eduquiz.wsgi:application
+web: gunicorn --workers 3 eduquiz.wsgi:application

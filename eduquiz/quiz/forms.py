@@ -28,10 +28,26 @@ class DocumentUploadForm(forms.ModelForm):
             ),
         }
 
+    def clean_file(self):
+        uploaded = self.cleaned_data['file']
+        max_size = 15 * 1024 * 1024
+        if uploaded.size > max_size:
+            raise forms.ValidationError('Le PDF ne doit pas dépasser 15 Mo.')
+        if not uploaded.name.lower().endswith('.pdf'):
+            raise forms.ValidationError('Seuls les fichiers PDF sont acceptés.')
+        return uploaded
+
 
 class QuizCreateForm(forms.ModelForm):
     question_count = forms.ChoiceField(
-        choices=[('10', '10 questions'), ('20', '20 questions'), ('50', '50 questions')],
+        choices=[
+            ('5', '5 questions'),
+            ('10', '10 questions'),
+            ('15', '15 questions'),
+            ('20', '20 questions'),
+            ('30', '30 questions'),
+            ('50', '50 questions'),
+        ],
         initial='10',
         label='Nombre de questions',
     )

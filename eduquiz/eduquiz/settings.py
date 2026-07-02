@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 import os
+import urllib.parse
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -21,12 +22,19 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-#c!oqx7axgox$g)3%sk7pv^x^%upgpedf85qry2i@f63jlx(n('
+SECRET_KEY = os.environ.get(
+    'SECRET_KEY',
+    'django-insecure-#c!oqx7axgox$g)3%sk7pv^x^%upgpedf85qry2i@f63jlx(n('
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'False').lower() in ('1', 'true', 'yes')
 
-ALLOWED_HOSTS = ['eduquiz-ai-dev-fortuno.onrender.com', 'localhost']
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+    if host.strip()
+]
 
 
 
@@ -39,7 +47,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'quiz',
+    'eduquiz.quiz',
 ]
 
 MIDDLEWARE = [
@@ -79,12 +87,38 @@ WSGI_APPLICATION = 'eduquiz.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+DATABASE_URL = os.environ.get('DATABASE_URL')
+if DATABASE_URL:
+    url = urllib.parse.urlparse(DATABASE_URL)
+    if url.scheme in ('postgres', 'postgresql'):
+        engine = 'django.db.backends.postgresql'
+    elif url.scheme == 'mysql':
+        engine = 'django.db.backends.mysql'
+    elif url.scheme in ('sqlite', 'sqlite3'):
+        engine = 'django.db.backends.sqlite3'
+    else:
+        raise ValueError(f'Unsupported DATABASE_URL scheme: {url.scheme}')
+
+    DATABASES = {
+        'default': {
+            'ENGINE': engine,
+            'NAME': url.path[1:] if engine != 'django.db.backends.sqlite3' else BASE_DIR / url.path[1:],
+            'USER': url.username or '',
+            'PASSWORD': url.password or '',
+            'HOST': url.hostname or '',
+            'PORT': url.port or '',
+        }
     }
-}
+
+    if url.scheme in ('sqlite', 'sqlite3'):
+        DATABASES['default']['NAME'] = BASE_DIR / url.path[1:]
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation

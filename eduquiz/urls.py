@@ -21,7 +21,7 @@ from django.urls import include, path
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', include('quiz.urls', namespace='quiz')),
+    path('', include('eduquiz.quiz.urls', namespace='quiz')),
 ]
 
 if settings.DEBUG:
